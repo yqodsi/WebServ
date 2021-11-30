@@ -6,6 +6,8 @@
 #include <sstream>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <errno.h>
+
 class response
 {
 private:
@@ -14,7 +16,7 @@ private:
 public:
 	response(/* args */);
 	~response();
-	void setAutoindexBody(const char *path);
+	int setAutoindexBody(std::string path, std::string host);
 	std::string get_body() { return this->body; };
 };
 
@@ -26,46 +28,59 @@ response::~response()
 {
 }
 
-void response::setAutoindexBody(const char *path)
+int response::setAutoindexBody(std::string path, std::string host)
 {
 	std::string buffer;
 	struct dirent *dir_element; // element for directory entry
-	DIR *dr = opendir(path);
+	DIR *dr;
 	struct stat file_info;
-	std::vector<std::string> dirFile;
+	std::vector<std::string> listing;
+	errno = 0;
 
-	char *command = (char *)"/bin/ls > /tmp/command_output.txt";
-	system(command);
-	std::ifstream command_output;
-	command_output.open("/tmp/command_output.txt");
-	if (command_output.is_open())
-	{
-		while (command_output)
-		{
-			getline(command_output, buffer, ' ');
-			dirFile.push_back(buffer);
-			buffer.clear();
-		}
-	}
-	command_output.close();
 	// for (unsigned int i = 0; i < dirFile.size(); ++i)
 	// 	std::cout << dirFile[i] << "\n";
 	body += "<head>\n";
 	body += "<title >Index of /</title>\n";
 	body += "</head>\n";
 	body += "<body>\n";
-
-	dir_element = readdir(dr);
 	body += "<h1>";
 	body += "Index of ";
-	if (!strcmp(dir_element->d_name, "."))
-		body += "/";
 
+	if (!strcmp(path.c_str(), "/"))
+	{
+		path = host;
+		body += "/";
+	}
 	else
-		body += dir_element->d_name;
+	{
+		body += host;
+		body += host;
+	}
+	dr = opendir(path.c_str());
+	if (!dr)
+	{
+		perror("readdir() failed");
+		return -1;
+	}
+	for (int len = path.size(); !strcmp(path.c_str(), "/") ; len--)
+	{
+		if (path[len] == '/')
+		{
+			path = &path[len];
+			std::cout << path << std::endl;
+			break;
+		}
+	}
+	body += path;
+
 	body += "</h1>\n";
+	if (0 != errno)
+		perror("readdir() failed");
+	else
+		std::cout << "No more entries." << std::endl;
 	while ((dir_element = readdir(dr)))
 	{
+		listing.push_back(dir_element->d_name);
 		lstat(dir_element->d_name, &file_info);
 		if (S_ISREG(file_info.st_mode))
 		{
@@ -92,14 +107,16 @@ void response::setAutoindexBody(const char *path)
 	}
 	body += "</body>\n";
 	std::cout << body << std::endl;
-	// std::cout << body << std::endl;
+	for (int i = 0; i < listing.size(); i++)
+		std::cout << listing[i] << std::endl;
+	return 0;
 }
 
 int main(int argc, char const *argv[])
 {
 	response res;
-	const char *path = "/Users/yqodsi/Desktop/leet/autoindex/";
-	res.setAutoindexBody(path);
+	const char *path = "/";
+	res.setAutoindexBody(path, "/Users/yqodsi/Desktop/leet/autoindex");
 	// std::cout << res.get_body() << std::endl;
 	return 0;
 }

@@ -1,6 +1,6 @@
 #ifndef FileParssE_HPP
 #define FileParssE_HPP
-#include "../../headers.hpp"
+#include "../utils/headers.hpp"
 
 #define LOCATION_MAX_ELEMENT 7
 #define SERVER_MAX_ELEMENT 6
@@ -81,24 +81,7 @@ class FileParss
         std::vector<serverINFO>    SplitServers();
         void    init_pointer(bool);
         void   ft_clean(std::vector<std::string> str);
-        bool    isValideMethode(std::string tmp);
+        bool    isValideMethod(std::string tmp);
 };
-
-template <typename T>
-void    _print(T &var, std::string type)
-{
-    if(type == "vector")
-    {
-        for (size_t i = 0; i < var.size(); i++)
-            std::cout << var[i] << std::endl;
-    }
-    else if (type == "string")
-    {
-        for (size_t i = 0; i < var.size(); i++)
-            std::cout << var[i];
-        std::cout << std::endl;
-    }
-}
-
 
 #endif//

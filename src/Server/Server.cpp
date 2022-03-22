@@ -1,5 +1,5 @@
 #include "Server.hpp"
-
+#include "../Cgi/cgi.hpp"
 // Default constructor
 Server::Server() : running(1),
 				   _masterSockFD(0),
@@ -7,8 +7,6 @@ Server::Server() : running(1),
 				   _host(""),
 				   _addrLen(0),
 				   _maxSockFD(0),
-				   _isChunked(false),
-				   _contentLength(0),
 				   _portServer(0),
 				   _mbs(0),
 				   _isvalid(1)
@@ -22,13 +20,10 @@ Server::Server(std::vector<serverINFO> &servers) : running(1),
 												   _host(""),
 												   _addrLen(0),
 												   _maxSockFD(0),
-												   _isChunked(false),
-												   _contentLength(0),
 												   _portServer(0),
 												   _mbs(0),
 												   _isvalid(1)
 {
-	// _servers.assign(parser.getServers().begin(), parser.getServers().end());
 	this->makeSockets();
 	this->waitingForConnections();
 }
@@ -59,7 +54,6 @@ Server &Server::operator=(Server const &ths)
 {
 	if (this != &ths)
 	{
-		// this->_parser = ths._parser;
 		this->_servers = ths._servers;
 		this->_masterSockFDs = ths._masterSockFDs;
 		this->_masterSockFD = ths._masterSockFD;
@@ -75,11 +69,6 @@ Server &Server::operator=(Server const &ths)
 		this->_maxSockFD = ths._maxSockFD;
 		this->_clients = ths._clients;
 		this->_accptMaster = ths._accptMaster;
-		// this->_request = ths._request;
-		this->_isChunked = ths._isChunked;
-		this->_contentLength = ths._contentLength;
-		// this->_server = ths._server;
-		this->_mbs = ths._mbs;
 		this->_isvalid = ths._isvalid;
 	}
 	return *this;
@@ -96,8 +85,7 @@ void Server::makeSockets()
 	{
 		_ports = itServer->getPorts();
 		_host = itServer->getHost();
-		std::cout << _ports[2] << std::endl;
-		for (std::vector<unsigned short>::iterator itPort = _ports.begin(); itPort != _ports.end(); ++itPort)
+		for (std::vector<int>::iterator itPort = _ports.begin(); itPort != _ports.end(); ++itPort)
 		{
 			_port = *itPort;
 			try
@@ -109,7 +97,6 @@ void Server::makeSockets()
 				this->bindSocket();
 				// Listen for socket connections
 				this->listenSocket();
-				std::cout << "New socket " + std::to_string(_masterSockFD) + " bind to " << _host << ':' << _port << std::endl;
 			}
 			catch (const std::exception &e)
 			{
@@ -143,8 +130,7 @@ void Server::bindSocket()
 	_serverAddr.sin_family = AF_INET;
 	_serverAddr.sin_port = htons(_port);
 	_serverAddr.sin_addr.s_addr = (_host == "ANY") ? htonl(INADDR_ANY) : inet_addr(_host.c_str());
-	if (bind(_masterSockFD, (struct sockaddr *)&_serverAddr, sizeof(_serverAddr)) == -1)
-		throw std::runtime_error("Unable to bind the socket " + std::to_string(_masterSockFD) + " with " + _host + ":" + std::to_string(_port) + ": Already used");
+	bind(_masterSockFD, (struct sockaddr *)&_serverAddr, sizeof(_serverAddr));
 }
 
 // Listen for incoming connections from clients
@@ -211,12 +197,9 @@ void Server::waitingForConnections()
 
 void Server::newConnectHandling(int &sockFD)
 {
-	std::cout << "new connection" << std::endl;
-
 	int accptSockFD = accept(sockFD, (struct sockaddr *)&_clientAddr, &_addrLen);
 	if (accptSockFD == -1)
 		throw std::runtime_error("Unable to accept the connection from client by the socket " + std::to_string(accptSockFD));
-	std::cout << "New connection: Master socket " << std::to_string(sockFD) << ". Accept socket " + std::to_string(accptSockFD) << ", address " << inet_ntoa(_clientAddr.sin_addr) << ":" << std::to_string(ntohs(_clientAddr.sin_port)) << std::endl;
 	if (fcntl(accptSockFD, F_SETFL, O_NONBLOCK) == -1)
 		throw std::runtime_error("Unable to set the socket " + std::to_string(accptSockFD) + " to non-blocking.");
 	FD_SET(accptSockFD, &_masterFDs);
@@ -231,63 +214,11 @@ void Server::newConnectHandling(int &sockFD)
 		_accptMaster.insert(std::pair<int, int>(accptSockFD, sockFD));
 }
 
-// bool checkContent(std::string &buffer)
-// {
-// 	for (size_t i = 0; i < buffer.size(); i++)
-// 	{
-// 		if (buffer[i] != '\r' && buffer[i] != '\n')
-// 			return true;
-// 	}
-// 	buffer.clear();
-// 	return false;
-// }
-
-// bool Server::detectEndRequest(std::string &buffReq, int &accptSockFD)
-// {
-// 	getServerBySocket(accptSockFD, &_server, &_portServer);
-// 	_mbs = _server.getClientMaxBodySize() * 1024 * 1024;
-// 	if (!checkContent(buffReq))
-// 		return false;
-// 	else if (!(buffReq.find("\r\n\r\n") == std::string::npos))
-// 	{
-// 		std::string headers = buffReq.substr(0, buffReq.find("\r\n\r\n") + 4);
-// 		if (headers.find("Transfer-Encoding: chunked") != std::string::npos)
-// 		{
-// 			_isChunked = true;
-// 			if (buffReq.find("0\r\n\r\n") != std::string::npos)
-// 				return true;
-// 			else
-// 				return false;
-// 		}
-// 		else if (headers.find("Content-Length") != std::string::npos)
-// 		{
-// 			try
-// 			{
-// 				size_t length = std::stoi(headers.substr(headers.find("Content-Length: ") + 16));
-// 				std::string body = buffReq.substr(buffReq.find("\r\n\r\n") + 4);
-
-// 				if (length > (size_t)_mbs)
-// 					return true;
-// 				else if (body.length() < length)
-// 					return false;
-// 			}
-// 			catch (const std::exception &e)
-// 			{
-// 				std::cerr << e.what() << '\n';
-// 			}
-// 		}
-// 		return true;
-// 	}
-// 	return false;
-// }
-
 void Server::accptedConnectHandling(int &accptSockFD)
 {
 	char _buffRes[BUFFER_SIZE + 1] = {0};
 	bzero(_buffRes, sizeof(_buffRes));
 	int valRead = recv(accptSockFD, _buffRes, BUFFER_SIZE, 0);
-	std::cout << _buffRes << std::endl;
-	std::cout << "Activity in socket " << std::to_string(accptSockFD) << ", address: " << inet_ntoa(_clientAddr.sin_addr) << ':' << std::to_string(ntohs(_clientAddr.sin_port)) << std::endl;
 	if (valRead > 0)
 	{
 		_buffRes[valRead] = '\0';
@@ -303,7 +234,6 @@ void Server::accptedConnectHandling(int &accptSockFD)
 	}
 	if (valRead == 0)
 	{
-		std::cout << "Client Disconnected socket: " << std::to_string(accptSockFD) << std::endl;
 		close(accptSockFD);
 		FD_CLR(accptSockFD, &_masterFDs);
 		FD_CLR(accptSockFD, &_writeFDs);
@@ -313,75 +243,6 @@ void Server::accptedConnectHandling(int &accptSockFD)
 		return; // Socket is connected but doesn't send request.
 }
 
-// bool checkChunkSize(std::string &size)
-// {
-// 	std::string cmp = "0123456789ABCDEFabcdef";
-// 	for (size_t i = 0; i < size.size(); i++)
-// 	{
-// 		if (cmp.find(size[i]) == std::string::npos)
-// 			return false;
-// 	}
-// 	return true;
-// }
-
-// size_t getChunkedDataSize(std::string &chunkSize)
-// {
-// 	chunkSize.pop_back();
-// 	if (!checkChunkSize(chunkSize))
-// 		throw std::runtime_error("Invalid character in chunk size");
-// 	size_t size = 0;
-// 	std::stringstream stream(chunkSize);
-// 	stream >> std::hex >> size;
-// 	return size;
-// }
-
-// std::string Server::unchunkingRequest(std::string &request)
-// {
-// 	std::string body = request.substr(request.find("\r\n\r\n") + 4);
-// 	std::string unchunkedData = request.substr(0, request.find("\r\n\r\n") + 4);
-// 	_contentLength = 0;
-// 	for (size_t i = 0; i < body.size();)
-// 	{
-// 		std::string tmpBody = body.substr(i, std::string::npos);
-// 		size_t chunkSize = 0;
-// 		std::stringstream bodyStream(tmpBody);
-// 		std::string line("");
-// 		std::getline(bodyStream, line);
-// 		i += line.length() + 1;
-// 		// if (line.find("0") == std::string::npos)
-// 		chunkSize = getChunkedDataSize(line);
-// 		unchunkedData.append(body.c_str() + i, chunkSize);
-// 		i += chunkSize + 2;
-// 		_contentLength += chunkSize;
-// 	}
-// 	_isChunked = false;
-// 	return unchunkedData;
-// }
-
-// void Server::getServerBySocket(int &accptSockFD, HttpServer *server, unsigned short *port)
-// {
-// 	std::map<int, int>::iterator it = _accptMaster.find(accptSockFD);
-// 	struct sockaddr_in serverAddr;
-// 	std::memset(&serverAddr, 0, _addrLen);
-// 	if (getsockname(it->second, (struct sockaddr *)&serverAddr, &_addrLen) == -1)
-// 		throw std::runtime_error("Unable to get server informations from socket " + std::to_string(it->second));
-// 	for (std::vector<HttpServer>::iterator it = _servers.begin(); it != _servers.end(); it++)
-// 	{
-// 		if (it->getHost() == inet_ntoa(serverAddr.sin_addr))
-// 		{
-// 			_ports = it->getPorts();
-// 			for (std::vector<unsigned short>::iterator itPort = _ports.begin(); itPort != _ports.end(); itPort++)
-// 			{
-// 				if (*itPort == ntohs(serverAddr.sin_port))
-// 				{
-// 					*server = *it;
-// 					*port = *itPort;
-// 					return;
-// 				}
-// 			}
-// 		}
-// 	}
-// }
 
 std::string Server::get_body(std::string file_name)
 {
@@ -433,30 +294,27 @@ char *Server::ft_itoa(int n)
 
 void Server::responseHandling(int &accptSockFD)
 {
-	// Response response(this->_request, _server, _portServer);
 	std::string body;
 	std::string path = _request.getTarget().erase(0, 1);
-	// if (_request.getTarget().compare(0, _request.getTarget().size(), ""))
-	// 	std::cout << _request.getPort() << std::endl;
 	char *header = strdup("HTTP/1.1 200 OK\r\nContent-Length: ");
-	if (path.size() == 0)
-		body = get_body("index.html");
-	else
-		body = get_body(path);
-	std::string all = std::string(header) + std::string(ft_itoa(body.size())) + "\r\n\r\n" + body;
+
+	Response _resp;
+	_resp.creatResponse(this->_servers, this->_request);
+	this->_request.clear();
+
+	std::string all = std::string(header) + std::string(ft_itoa(_resp.GetBody().size())) + "\r\n\r\n" + _resp.GetBody();
 
 	if (FD_ISSET(accptSockFD, &_writeFDs))
 	{
-		if (send(accptSockFD, all.c_str(), all.length(), 0) != (ssize_t)all.length())
+		if (send(accptSockFD, _resp.getRespHeader().c_str(), _resp.getRespHeader().length(), 0) != (ssize_t)_resp.getRespHeader().length())
 			throw std::runtime_error("Unable to send the response to client in socket " + std::to_string(accptSockFD));
-		if (0) // if connection is set to close in request close
+		if (!this->_request.getReqValue("Connection").compare("close")) // if connection is set to close in request close
 		{
-			std::cout << "Disconnected socket: " << std::to_string(accptSockFD) << std::endl;
 			close(accptSockFD);
 			FD_CLR(accptSockFD, &_masterFDs);
 			FD_CLR(accptSockFD, &_writeFDs);
 		}
-		// _request.clearRequest();
-		// response.clearAll();
 	}
+	_resp.clear();
+	this->_request.clear();
 }

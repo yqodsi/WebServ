@@ -28,6 +28,8 @@ void    FileParss::get_servers_index()
             servers_index.push_back(i);
         else if (file_content[i].compare("]") == 0)
             servers_index.push_back(i);
+        if (!this->file_content[i].compare("[") && this->file_content[i - 1].find(SERVER) == std::string::npos)
+            throw std::runtime_error("Error: Check You Config File!");
     }
 }
 
@@ -40,7 +42,7 @@ void    FileParss::run_ports(std::string &tmp, serverINFO &sv)
     for (size_t i = 0; i < tmp.size(); i++)
         if (tmp[i] < '0' || tmp[i] > '9')
             throw std::runtime_error("Error: Check Your Ports!");
-    sv.addPorts(std::stoi(tmp));
+    sv.addPorts(atoi(tmp.c_str()));
 }
 
 void    FileParss::run_error_pages(std::string &tmp, serverINFO &sv)
@@ -52,8 +54,8 @@ void    FileParss::run_error_pages(std::string &tmp, serverINFO &sv)
     for (size_t i = 0; tmp[i] != ' '; i++)
         if (tmp[i] < '0' || tmp[i] > '9')
             throw std::runtime_error("Error: Check Your ERROR_PAGE!");
-    int error_num = std::stoi(tmp); // stoi cpp11
-    std::string num = std::to_string(std::stoi(tmp)); // t_string -42 cpp11
+    int error_num = atoi(tmp.c_str()); 
+    std::string num = std::to_string(atoi(tmp.c_str()));
     tmp.erase(0,strlen(num.c_str()));
     ft_strtrim(tmp);
     if (tmp.empty())
@@ -61,6 +63,9 @@ void    FileParss::run_error_pages(std::string &tmp, serverINFO &sv)
     for (size_t i = 0; i < tmp.size(); i++)
         if (tmp[i] == ' ' || tmp[i] == '\t')
             throw std::runtime_error("Error: Check Your ERROR_PAGE!");
+    std::ifstream file(tmp.c_str());
+    if (!file.is_open())
+        throw std::runtime_error("Error: Error Page [" + tmp +"] Dosnt Exist!");
     sv.setErrorPage(tmp, error_num);
 }
 
@@ -73,6 +78,8 @@ void    FileParss::run_root_dir(std::string &tmp, serverINFO &sv)
     for (size_t i = 0; i < tmp.size(); i++)
         if (tmp[i] == ' ' || tmp[i] == '\t')
             throw std::runtime_error("Error: Check Your Root!");
+    std::ifstream file(tmp.c_str());
+
     sv.setRootDir(tmp);
 }
 void    FileParss::run_server_name(std::string &tmp, serverINFO &sv)
@@ -112,7 +119,7 @@ void    FileParss::run_body_size(std::string &tmp, serverINFO &sv)
     for (size_t i =0; i < tmp.size() - 1 ;i++)
         if (tmp[i] < '0' || tmp[i] > '9')
             throw std::runtime_error("Error: Check Your CLIENT_BODY_SIZE!");
-    int num = std::stoi(tmp);
+    int num = atoi(tmp.c_str());
     sv.setClienBodySize(num);
 }
 
@@ -147,7 +154,7 @@ void    FileParss::locationUploadEnable(std::string &tmp, location &sv_loc)
         sv_loc.setLocationUploadEnable(true);
     else if (!tmp.compare("off"))
         sv_loc.setLocationUploadEnable(false);
-    else if (sv_loc.getLocationExtention().find("upload") != std::string::npos)
+    else if (sv_loc.getLocationPath().find("upload") != std::string::npos)
         throw std::runtime_error("Error: Location autoindex must be 'on' or 'off'!");
     else
         sv_loc.setLocationUploadEnable(false);
@@ -157,7 +164,7 @@ void    FileParss::locationUploadStore(std::string &tmp, location &sv_loc)
 {
     tmp.erase(0,strlen(UPLOAD_STORE));
     ft_strtrim(tmp);
-    if (tmp.empty() && sv_loc.getLocationExtention().find("upload") != std::string::npos)
+    if (tmp.empty() && sv_loc.getLocationPath().find("upload") != std::string::npos)
         throw std::runtime_error("Error: Check You Location uploade_store!");
     else
     {
@@ -173,15 +180,16 @@ void    FileParss::locationReturn(std::string &tmp, location &sv_loc)
     size_t _return;
     tmp.erase(0,strlen(RETURN));
     ft_strtrim(tmp);
-    if (tmp.empty() && sv_loc.getLocationExtention().find("return") != std::string::npos)
+    if (tmp.empty() && sv_loc.getLocationPath().find("return") != std::string::npos)
         throw std::runtime_error("Error: Check You Location return!");
     else
     {
-        for (size_t i = 0; i < tmp.size(); i++)
-            if (tmp[i] < '0' || tmp[i] > '9')
-                throw std::runtime_error("Error: Check You Location return!");
-        _return = std::stoi(tmp);
+        _return = atoi(tmp.c_str());
         sv_loc.setLocationReturnCode(_return);
+
+        tmp.erase(0, std::to_string(_return).size());
+        ft_strtrim(tmp);
+        sv_loc.setLocationReturnPath(tmp);
     }
 }
 
@@ -197,30 +205,30 @@ void    FileParss::locationFastCgiPassRun(std::string &tmp, location &sv_loc)
     sv_loc.setLocationFastCgiPass(tmp);
 }
 
-bool    FileParss::isValideMethode(std::string tmp)
+bool    FileParss::isValideMethod(std::string tmp)
 {
     tmp.pop_back();
-    std::vector<std::string> methodes = ft_split(tmp, ',');
-    for (size_t i = 0; i < methodes.size(); i++)
-        if (methodes[i].compare("GET") && methodes[i].compare("POST") && methodes[i].compare("DELETE"))
-            throw std::runtime_error("Error: Methode Not Allowed [" + methodes[i] + "]");
+    std::vector<std::string> Methods = ft_split(tmp, ',');
+    for (size_t i = 0; i < Methods.size(); i++)
+        if (Methods[i].compare("GET") && Methods[i].compare("POST") && Methods[i].compare("DELETE"))
+            throw std::runtime_error("Error: Method Not Allowed [" + Methods[i] + "]");
     return true;
 }
 
 void    FileParss::locationAllowMethodsRun(std::string &tmp, location &sv_loc)
 {
-    std::map<std::string , bool> methodes;
+    std::map<std::string , bool> Methods;
     tmp.erase(0, strlen(ALLOW_METHODS));
     ft_strtrim(tmp);
-    if (tmp[0] != '[' || !isValideMethode(&tmp[1]))
-        throw std::runtime_error("Error: Check You Location Allow_methode!");
+    if (tmp[0] != '[' || !isValideMethod(&tmp[1]))
+        throw std::runtime_error("Error: Check You Location Allow_Method!");
     if (tmp.find("GET") != std::string::npos)
-        methodes.insert(std::pair<std::string, bool>("GET", true));
+        Methods.insert(std::pair<std::string, bool>("GET", true));
     if (tmp.find("POST") != std::string::npos)
-        methodes.insert(std::pair<std::string, bool>("POST", true));
+        Methods.insert(std::pair<std::string, bool>("POST", true));
     if (tmp.find("DELETE") != std::string::npos)
-        methodes.insert(std::pair<std::string, bool>("DELETE", true));
-    sv_loc.setLocationAllowedMethods(methodes);
+        Methods.insert(std::pair<std::string, bool>("DELETE", true));
+    sv_loc.setLocationAllowedMethods(Methods);
 }
 
 void    FileParss::init_pointer(bool location)
@@ -375,7 +383,7 @@ std::vector<serverINFO>    FileParss::SplitServers()
 
     for (size_t i = 0; i < this->server.size(); i++)
     {
-        std::vector<unsigned short> _ports;
+        std::vector<int> _ports;
         _ports = server[i].getPorts();
         for (size_t j = 0; j < _ports.size(); j++)
         {
@@ -391,16 +399,18 @@ std::vector<serverINFO>    FileParss::SplitServers()
 //check the validiti of argument normale usage [./webserv config.conf]
 void    FileParss::Arguments_checker(int ac, char **av)
 {
-    //for now i use only the config.conf because i need to use the first arg for other things ;)
-    // if (ac > 2)
-    // {
-    //     throw std::runtime_error("Error: Check your Arguments!");
-    // }
-    // if (av[1])
-    //     this->file_name = av[1];
-    // else
+    if (ac > 2)
+        throw std::runtime_error("Error: Check your Arguments!");
+    if (av[1])
+    {
+        std::ifstream file(av[1]);
+        if (file)
+            this->file_name = av[1];
+        else
+            throw std::runtime_error("Error: Check your Arguments!");
+    }
+    else
         this->file_name = "conf/config.conf";
-    std::string extention = &this->file_name[static_cast<int>(this->file_name.find(".") + 1)];
 }
 
 int    isspace(char c)

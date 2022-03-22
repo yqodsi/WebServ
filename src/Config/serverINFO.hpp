@@ -4,13 +4,13 @@
 #include "FileParss.hpp"
 #include "locationINFO.hpp"
 
-class loc;
+class location;
 
 class serverINFO
 {
     friend class FileParss;
     private:
-        std::vector<unsigned short> ports;
+        std::vector<int> ports;
         int port;
         std::string host;
         std::string server_name;
@@ -23,7 +23,7 @@ class serverINFO
         ~serverINFO();
 
         void    addPorts(int port);
-        std::vector<unsigned short> getPorts();
+        std::vector<int>  getPorts();
         void    setPort(int port);
         int    getPort();
         void    printPortData();
@@ -48,6 +48,9 @@ class serverINFO
         void    addLocation(std::map<std::string, location> &sv_loc);
         void    clearLocation(location &sv_loc);
         void    printServerALLData();
+
+
+        std::map<std::string, location>     getLocations();
         
 };
 #endif
